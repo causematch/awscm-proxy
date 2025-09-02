@@ -66,9 +66,9 @@ Resources:
             #set($qs = "#foreach($key in $input.params().querystring.keySet()),$util.urlEncode($key)=$util.urlEncode($input.params().querystring.get($key))#end")
             #set($headers = "#foreach($key in $input.params().header.keySet()),$util.urlEncode($key)=$util.urlEncode($input.params().header.get($key))#end")
             Action=SendMessage&MessageBody={
-              "test": "21",
+              "test": "23",
               "body": "$util.base64Encode($input.body)",
-              "path": "$context.path",
+              "path": "$context.path.replaceFirst("/$context.stage", "")",
               "querystring": "$util.urlEncode($qs.substring(1))",
               "headers": "$util.urlEncode($headers.substring(1))",
               "method": "$context.httpMethod"
@@ -78,7 +78,7 @@ Resources:
       MethodResponses:
         - StatusCode: 200
 
-  Deployment21b:
+  Deployment23a:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ProxyMethod
