@@ -63,21 +63,20 @@ Resources:
           integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
         RequestTemplates:
           application/json: |
-            #set($encodedQuery = "")
-            #set($encodedHeaders = $util.toJson($input.params().header))
+            #set($qs = "#foreach($key in $input.params().querystring.keySet())&$util.urlEncode($key)=$util.urlEncode($input.params().querystring.get($key))#end")
             Action=SendMessage&MessageBody={
+              "test": "19",
               "body": "$util.base64Encode($input.body)",
               "path": "$context.path",
-              "method": "$context.httpMethod",
-              "queryString": "$encodedQuery",
-              "headers": "$encodedHeaders"
+              "querystring": "$util.urlEncode($qs.substring(1))",
+              "method": "$context.httpMethod"
             }
         IntegrationResponses:
           - StatusCode: 200
       MethodResponses:
         - StatusCode: 200
 
-  Deployment14:
+  Deployment19a:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ProxyMethod
