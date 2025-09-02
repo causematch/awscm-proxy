@@ -5,6 +5,9 @@ Parameters:
   ApiName:
     Type: String
 
+  Timestamp:
+    Type: String
+
 Resources:
   SQSQueue:
     Type: AWS::SQS::Queue
@@ -75,6 +78,7 @@ Resources:
     Properties:
       RestApiId: !Ref RestApi
       StageName: prod
+      Description: !Sub 'Deployment: ${AWS::StackName} ${Timestamp}'
 
 Outputs:
   ApiEndpoint:
