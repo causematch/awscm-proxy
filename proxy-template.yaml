@@ -75,6 +75,9 @@ Resources:
             }
         IntegrationResponses:
           - StatusCode: 200
+            ResponseTemplates:
+              application/json: |
+                {"status": "ok", "test": 23}
       MethodResponses:
         - StatusCode: 200
 
