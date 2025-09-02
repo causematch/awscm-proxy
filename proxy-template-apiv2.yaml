@@ -10,20 +10,6 @@ Resources:
   SQSQueue:
     Type: AWS::SQS::Queue
 
-  QueuePolicy:
-    Type: AWS::SQS::QueuePolicy
-    Properties:
-      Queues:
-        - !Ref SQSQueue
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: apigateway.amazonaws.com
-            Action: sqs:SendMessage
-            Resource: !GetAtt SQSQueue.Arn
-
   ApiGatewayRole:
     Type: AWS::IAM::Role
     Properties:
