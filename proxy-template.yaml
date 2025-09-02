@@ -63,7 +63,7 @@ Resources:
           integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
         RequestTemplates:
           application/json: !Sub |
-            Action=SendMessage&MessageBody=helloworld
+            Action=SendMessage&MessageBody=$input.body
         IntegrationResponses:
           - StatusCode: 200
       MethodResponses:

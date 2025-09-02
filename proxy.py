@@ -98,7 +98,7 @@ class AwsProxy:
             raise
 
     def _create_stack(self):
-        with open("proxy-template-apiv2.yaml", "r") as f:
+        with open("proxy-template.yaml", "r") as f:
             template_body = f.read()
 
         self.cloudformation.create_stack(
