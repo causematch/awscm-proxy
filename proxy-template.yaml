@@ -69,8 +69,8 @@ Resources:
               "test": "23",
               "body": "$util.base64Encode($input.body)",
               "path": "$context.path.replaceFirst("/$context.stage", "")",
-              "querystring": "$util.urlEncode($qs.substring(1))",
-              "headers": "$util.urlEncode($headers.substring(1))",
+              "querystring": "$qs.substring(1)",
+              "headers": "$headers.substring(1)",
               "method": "$context.httpMethod"
             }
         IntegrationResponses:
