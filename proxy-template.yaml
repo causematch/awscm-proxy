@@ -5,9 +5,6 @@ Parameters:
   ApiName:
     Type: String
 
-  Timestamp:
-    Type: String
-
 Resources:
   SQSQueue:
     Type: AWS::SQS::Queue
@@ -65,20 +62,31 @@ Resources:
         RequestParameters:
           integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
         RequestTemplates:
-          application/json: !Sub |
-            Action=SendMessage&MessageBody=$input.body
+          application/json: |
+            #set($encodedQuery = "")
+            #set($encodedHeaders = $util.toJson($input.params().header))
+            Action=SendMessage&MessageBody={
+              "body": "$util.base64Encode($input.body)",
+              "path": "$context.path",
+              "method": "$context.httpMethod",
+              "queryString": "$encodedQuery",
+              "headers": "$encodedHeaders"
+            }
         IntegrationResponses:
           - StatusCode: 200
       MethodResponses:
         - StatusCode: 200
 
-  Deployment:
+  Deployment14:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: ProxyMethod
+    DependsOn:
+      - ProxyMethod
+      - RestApi
+      - ProxyResource
+    DeletionPolicy: Retain
     Properties:
       RestApiId: !Ref RestApi
       StageName: prod
-      Description: !Sub 'Deployment: ${AWS::StackName} ${Timestamp}'
 
 Outputs:
   ApiEndpoint:
