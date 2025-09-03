@@ -65,23 +65,25 @@ Resources:
           application/json: |
             #set($qs = "#foreach($key in $input.params().querystring.keySet()),$util.urlEncode($key)=$util.urlEncode($input.params().querystring.get($key))#end")
             #set($headers = "#foreach($key in $input.params().header.keySet()),$util.urlEncode($key)=$util.urlEncode($input.params().header.get($key))#end")
+            #if($qs.length() > 0)#set($qs = $qs.substring(1))#end
+            #if($headers.length() > 0)#set($headers = $headers.substring(1))#end
             Action=SendMessage&MessageBody={
-              "test": "23",
+              "test": "34",
               "body": "$util.base64Encode($input.body)",
               "path": "$context.path.replaceFirst("/$context.stage", "")",
-              "querystring": "$qs.substring(1)",
-              "headers": "$headers.substring(1)",
+              "querystring": "$qs",
+              "headers": "$headers",
               "method": "$context.httpMethod"
             }
         IntegrationResponses:
           - StatusCode: 200
             ResponseTemplates:
               application/json: |
-                {"status": "ok", "test": 23}
+                {"status": "ok", "test": 34}
       MethodResponses:
         - StatusCode: 200
 
-  Deployment23a:
+  Deployment34b:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ProxyMethod
