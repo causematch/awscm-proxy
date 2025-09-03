@@ -63,27 +63,27 @@ Resources:
           integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
         RequestTemplates:
           application/json: |
-            #set($qs = "#foreach($key in $input.params().querystring.keySet()),$util.urlEncode($key)=$util.urlEncode($input.params().querystring.get($key))#end")
-            #set($headers = "#foreach($key in $input.params().header.keySet()),$util.urlEncode($key)=$util.urlEncode($input.params().header.get($key))#end")
+            #set($qs = "#foreach($key in $input.params().querystring.keySet())&$util.urlEncode($key)=$util.urlEncode($input.params().querystring.get($key))#end")
+            #set($headers = "#foreach($key in $input.params().header.keySet())&$util.urlEncode($key)=$util.urlEncode($input.params().header.get($key))#end")
             #if($qs.length() > 0)#set($qs = $qs.substring(1))#end
             #if($headers.length() > 0)#set($headers = $headers.substring(1))#end
             Action=SendMessage&MessageBody={
-              "test": "34",
+              "test": "39",
               "body": "$util.base64Encode($input.body)",
               "path": "$context.path.replaceFirst("/$context.stage", "")",
-              "querystring": "$qs",
-              "headers": "$headers",
+              "querystring": "$util.base64Encode($qs)",
+              "headers": "$util.base64Encode($headers)",
               "method": "$context.httpMethod"
             }
         IntegrationResponses:
           - StatusCode: 200
             ResponseTemplates:
               application/json: |
-                {"status": "ok", "test": 34}
+                {"status": "ok", "test": 39}
       MethodResponses:
         - StatusCode: 200
 
-  Deployment34b:
+  Deployment39a:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ProxyMethod
