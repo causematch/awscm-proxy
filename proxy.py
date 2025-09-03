@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 import time
+import urllib.parse
 from datetime import UTC, datetime
 
 import boto3
@@ -157,17 +158,29 @@ class AwsProxy:
 
     def _forward_message(self, message, local_endpoint):
         try:
+            print(message)
             request_data = json.loads(message["Body"])
             body = request_data.get("body")
             if body:
                 body = base64.b64decode(body)
+            headers = request_data.get("headers")
+            if headers:
+                headers = base64.b64decode(headers).decode("utf-8")
+                headers = urllib.parse.parse_qs(headers)
+                headers = {key: val[0] for key, val in headers.items()}
+            query_string = request_data.get("querystring")
+            if query_string:
+                query_string = urllib.parse.parse_qs(
+                    base64.b64decode(query_string).decode("utf-8")
+                )
+                query_string = {key: val[0] for key, val in query_string.items()}
 
             response = requests.request(
                 method=request_data.get("method", "GET"),
                 url=f"{local_endpoint.rstrip('/')}{request_data.get('path', '/')}",
-                headers=request_data.get("headers", {}),
+                headers=headers,
                 data=body,
-                params=request_data.get("queryStringParameters", {}),
+                params=query_string,
             )
 
             logging.info(
