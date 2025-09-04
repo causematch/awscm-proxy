@@ -16,7 +16,7 @@ from botocore.exceptions import ClientError
 def main(args):
     options = parse_args(args)
 
-    proxy = AwsProxy(options.stack_name, options.delete_stack)
+    proxy = AwsProxy(options)
     if options.delete_stack:
         atexit.register(proxy.cleanup)
 
@@ -35,22 +35,22 @@ def main(args):
 
 def parse_args(args):
     parser = argparse.ArgumentParser(description="AWS-based ngrok replacement")
+    parser.add_argument("--stack-name", default="ngrok-replacement")
+    parser.add_argument("--delete-stack", action="store_true")
     parser.add_argument(
         "local_endpoint",
         nargs="?",
         help="Local HTTP endpoint (e.g., http://localhost:8000)",
     )
-    parser.add_argument("--stack-name", default="ngrok-replacement")
-    parser.add_argument("--delete-stack", action="store_true")
     return parser.parse_args(args)
 
 
 class AwsProxy:
-    def __init__(self, stack_name, delete_on_exit):
+    def __init__(self, options):
         self.cloudformation = boto3.client("cloudformation")
         self.sqs_client = boto3.client("sqs")
-        self.stack_name = stack_name
-        self.delete_on_exit = delete_on_exit
+        self.stack_name = options.stack_name
+        self.delete_stack = options.delete_stack
         self.queue_url = None
         self.endpoint_url = None
 
@@ -85,7 +85,7 @@ class AwsProxy:
                 time.sleep(5)
 
     def cleanup(self):
-        if self.delete_on_exit:
+        if self.delete_stack:
             try:
                 logging.info("Deleting stack %s", self.stack_name)
                 self.cloudformation.delete_stack(StackName=self.stack_name)
