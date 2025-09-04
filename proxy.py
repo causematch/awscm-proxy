@@ -112,12 +112,6 @@ class AwsProxy:
             Capabilities=["CAPABILITY_IAM"],
         )
 
-    #   def _wait_for_stack_complete(self):
-    #       waiter = self.cloudformation.get_waiter("stack_create_complete")
-    #       logging.info("Waiting for stack creation to complete...")
-    #       waiter.wait(
-    #           StackName=self.stack_name, WaiterConfig={"Delay": 15, "MaxAttempts": 50}
-    #       )
     def _wait_for_stack_complete(self):
         logging.info("Waiting for stack creation to complete...")
         while True:
