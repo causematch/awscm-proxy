@@ -36,6 +36,7 @@ def main(args):
 def parse_args(args):
     parser = argparse.ArgumentParser(description="AWS-based ngrok replacement")
     parser.add_argument("--stack-name", default="ngrok-replacement")
+    parser.add_argument("--update-stack", action="store_true")
     parser.add_argument("--delete-stack", action="store_true")
     parser.add_argument(
         "local_endpoint",
@@ -50,17 +51,22 @@ class AwsProxy:
         self.cloudformation = boto3.client("cloudformation")
         self.sqs_client = boto3.client("sqs")
         self.stack_name = options.stack_name
+        self.update_stack = options.update_stack
         self.delete_stack = options.delete_stack
         self.queue_url = None
         self.endpoint_url = None
+        self.stack_exists = self._stack_exists()
 
     def setup(self):
-        if self._stack_exists():
+        if self.stack_exists:
+            if self.update_stack:
+                self._deploy_stack()
+                self._wait_for_stack_complete()
             logging.info("using existing stack: %s", self.stack_name)
             self._get_stack_outputs()
         else:
             logging.info("Creating stack %s", self.stack_name)
-            self._create_stack()
+            self._deploy_stack()
             self._wait_for_stack_complete()
             self._get_stack_outputs()
 
@@ -101,11 +107,13 @@ class AwsProxy:
                 return False
             raise
 
-    def _create_stack(self):
-        with open("proxy-template.yaml", "r") as f:
+    def _deploy_stack(self):
+        with open("proxy-template.yaml", "r", encoding="utf-8") as f:
             template_body = f.read()
 
-        self.cloudformation.create_stack(
+        cfn = self.cloudformation
+        method = cfn.update_stack if self.stack_exists else cfn.create_stack
+        method(
             StackName=self.stack_name,
             TemplateBody=template_body,
             Parameters=[{"ParameterKey": "ApiName", "ParameterValue": self.stack_name}],
@@ -113,7 +121,7 @@ class AwsProxy:
         )
 
     def _wait_for_stack_complete(self):
-        logging.info("Waiting for stack creation to complete...")
+        logging.info("Waiting for stack deployment to complete...")
         while True:
             time.sleep(15)
             try:
@@ -122,7 +130,7 @@ class AwsProxy:
                 )
                 current_status = response["Stacks"][0]["StackStatus"]
                 logging.info("Stack status: %s", current_status)
-                if current_status == "CREATE_COMPLETE":
+                if current_status in ["CREATE_COMPLETE", "UPDATE_COMPLETE"]:
                     return
 
                 if current_status in [
