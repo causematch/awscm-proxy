@@ -1,0 +1,42 @@
+{
+    "plugins": [
+        "import",
+        "react"
+    ],
+    "env": {
+        "es6": true,
+        "browser": true
+    },
+    "extends": [
+        "eslint:recommended",
+        "plugin:react/recommended",
+        "plugin:prettier/recommended"
+    ],
+    "parser": "babel-eslint",
+    "parserOptions": {
+        "ecmaVersion": 2017,
+        "sourceType": "module",
+        "ecmaFeatures": {
+            "jsx": true
+        }
+    },
+    "rules": {
+        "react/jsx-uses-react": 2,
+        "react/jsx-uses-vars": 2,
+        "react/prop-types": [1, { "ignore": ["item"] } ],
+        "no-unused-vars": [1, { "argsIgnorePattern": "^_"} ],
+        "react/display-name": 1,
+        "no-useless-escape": 1,
+        "no-case-declarations": 1,
+        "no-fallthrough": 1,
+        "no-prototype-builtins": 1,
+        "react/jsx-no-target-blank": 1,
+        "no-control-regex": 1,
+        "no-extra-boolean-cast": 1
+    },
+    "settings": {
+        "react": {
+            "version": "detect"
+        }
+    }
+}

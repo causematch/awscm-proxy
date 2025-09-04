@@ -1,0 +1,21 @@
+{
+  "name": "cm-proxy",
+  "version": "0.1.0",
+  "description": "GUI for local proxy",
+  "main": "index.js",
+  "repository": "git@github.com:causematch/cm-proxy.git",
+  "author": "Aryeh Leib Taurog <git@aryehleib.com>",
+  "license": "MIT",
+  "dependencies": {
+    "eslint": "^9.34.0",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-react": "^7.37.5",
+    "grommet": "^2.48.0",
+    "prettier": "^3.6.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "styled-components": "^6.1.19",
+    "vite": "^7.1.4"
+  }
+}
