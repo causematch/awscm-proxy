@@ -1,0 +1,40 @@
+[project]
+name = "cm-proxy"
+version = "0.1.0"
+description = "A cheap, secure, and straightforward serverless localhost proxy"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.40.23",
+    "requests>=2.32.5",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "httpie>=3.2.4",
+    "ipython>=9.5.0",
+    "isort>=6.0.1",
+    "pylint>=3.3.8",
+    "pytest>=8.4.1",
+]
+
+[tool.pylint.main]
+jobs = 2
+
+[tool.pylint.format]
+indent-after-paren = 2
+
+[tool.pylint."messages control"]
+disable = [
+    "too-few-public-methods",
+    "invalid-name",
+    "inconsistent-return-statements",
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "unnecessary-lambda-assignment",
+]
+
+[tool.pylint.miscellaneous]
+notes = ["FIXME", "XXX", "DEBUG"]
