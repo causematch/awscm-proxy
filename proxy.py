@@ -24,6 +24,8 @@ def main(args):
     try:
         endpoint_url = proxy.setup()
         print(f"Public endpoint: {endpoint_url}")
+        if not options.local_endpoint:
+            return
         proxy.poll_and_forward(options.local_endpoint)
     except KeyboardInterrupt:
         logging.info("Shutting down...")
@@ -36,6 +38,7 @@ def parse_args(args):
     parser = argparse.ArgumentParser(description="AWS-based ngrok replacement")
     parser.add_argument(
         "local_endpoint",
+        nargs="?",
         help="Local HTTP endpoint (e.g., http://localhost:8000)",
     )
     parser.add_argument("--stack-name", default="ngrok-replacement")
