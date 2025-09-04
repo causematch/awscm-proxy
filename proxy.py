@@ -4,6 +4,8 @@ import atexit
 import base64
 import json
 import logging
+import re
+import secrets
 import sys
 import time
 import urllib.parse
@@ -109,7 +111,7 @@ class AwsProxy:
 
     def _deploy_stack(self):
         with open("proxy-template.yaml", "r", encoding="utf-8") as f:
-            template_body = f.read()
+            template_body = transform_template(f.read())
 
         cfn = self.cloudformation
         method = cfn.update_stack if self.stack_exists else cfn.create_stack
@@ -192,6 +194,15 @@ class AwsProxy:
         except Exception:
             logging.error("Failed to forward message", exc_info=True)
             logging.info("message body: %s", message["Body"])
+
+
+def transform_template(template_body):
+    return re.sub(
+        "^  RestApiDeployment:$",
+        f"  RestApiDeployment{secrets.token_hex(6)}:",
+        template_body,
+        flags=re.MULTILINE,
+    )
 
 
 if __name__ == "__main__":

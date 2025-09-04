@@ -83,7 +83,7 @@ Resources:
       MethodResponses:
         - StatusCode: 200
 
-  Deployment39a:
+  RestApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ProxyMethod
