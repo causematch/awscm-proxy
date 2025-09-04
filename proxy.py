@@ -7,7 +7,6 @@ import logging
 import sys
 import time
 import urllib.parse
-from datetime import UTC, datetime
 
 import boto3
 import requests
@@ -106,14 +105,10 @@ class AwsProxy:
         with open("proxy-template.yaml", "r") as f:
             template_body = f.read()
 
-        timestamp = datetime.now(UTC).isoformat()
         self.cloudformation.create_stack(
             StackName=self.stack_name,
             TemplateBody=template_body,
-            Parameters=[
-                {"ParameterKey": "ApiName", "ParameterValue": self.stack_name},
-                {"ParameterKey": "Timestamp", "ParameterValue": timestamp},
-            ],
+            Parameters=[{"ParameterKey": "ApiName", "ParameterValue": self.stack_name}],
             Capabilities=["CAPABILITY_IAM"],
         )
 
