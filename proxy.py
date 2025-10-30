@@ -88,7 +88,7 @@ class AwscmProxy:
         return self.endpoint_url
 
     def poll_and_forward(self, options):
-        with proxy(options) as local_endpoint:
+        with local_proxy(options) as local_endpoint:
             while True:
                 try:
                     messages = self.sqs_client.receive_message(
@@ -212,7 +212,7 @@ class AwscmProxy:
 
 
 @contextlib.contextmanager
-def proxy(options):
+def local_proxy(options):
     local_endpoint = get_local_endpoint(options)
     if options.mitmproxy:
         cmd = "mitmweb" if options.mitmweb else "mitmproxy"
