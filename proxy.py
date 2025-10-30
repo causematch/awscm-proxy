@@ -174,7 +174,6 @@ class AwscmProxy:
 
     def _forward_message(self, message, local_endpoint):
         try:
-            print(message)
             request_data = json.loads(message["Body"])
             body = request_data.get("body")
             if body:
