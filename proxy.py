@@ -179,6 +179,15 @@ class AwscmProxy:
         self.queue_url = outputs["QueueUrl"]
 
 
+def transform_template(template_body):
+    return re.sub(
+        "^  RestApiDeployment:$",
+        f"  RestApiDeployment{secrets.token_hex(6)}:",
+        template_body,
+        flags=re.MULTILINE,
+    )
+
+
 @contextlib.contextmanager
 def local_proxy(options):
     local_endpoint = get_local_endpoint(options)
@@ -233,15 +242,6 @@ def forward_message(message, local_endpoint):
     except Exception:
         logging.error("Failed to forward message", exc_info=True)
         logging.info("message body: %s", message["Body"])
-
-
-def transform_template(template_body):
-    return re.sub(
-        "^  RestApiDeployment:$",
-        f"  RestApiDeployment{secrets.token_hex(6)}:",
-        template_body,
-        flags=re.MULTILINE,
-    )
 
 
 if __name__ == "__main__":
