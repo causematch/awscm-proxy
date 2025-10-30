@@ -39,9 +39,10 @@ def main(args):
 
 def parse_args(args):
     parser = argparse.ArgumentParser(description="AWS-based ngrok replacement")
-    parser.add_argument("--stack-name", default="ngrok-replacement")
+    parser.add_argument("--stack-name", default="awscm-proxy")
     parser.add_argument("--update-stack", action="store_true")
     parser.add_argument("--delete-stack", action="store_true")
+    parser.add_argument("--bidirectional", action="store_true")
     parser.add_argument(
         "--mitmproxy",
         help="Use mitmproxy listening on specified localhost port",
@@ -85,7 +86,7 @@ class AwscmProxy:
         return self.endpoint_url
 
     def poll_and_forward(self):
-        with local_proxy(self.options) as local_endpoint:
+        with self.local_proxy() as proxy:
             while True:
                 try:
                     messages = self.sqs_client.receive_message(
@@ -96,7 +97,12 @@ class AwscmProxy:
 
                     if "Messages" in messages:
                         for message in messages["Messages"]:
-                            forward_message(message, local_endpoint)
+                            try:
+                                proxy.forward_message(message)
+                            except Exception:
+                                logging.error(
+                                    "Failed to forward message", exc_info=True
+                                )
                             self.sqs_client.delete_message(
                                 QueueUrl=self.queue_url,
                                 ReceiptHandle=message["ReceiptHandle"],
@@ -104,6 +110,24 @@ class AwscmProxy:
                 except Exception:
                     logging.error("Error polling/forwarding", exc_info=True)
                     time.sleep(5)
+
+    @contextlib.contextmanager
+    def local_proxy(self):
+        local_endpoint = get_local_endpoint(self.options)
+        handler_class = (
+            BidirectionalHandler
+            if self.options.bidirectional
+            else UnidirectionalHandler
+        )
+        handler = handler_class(local_endpoint)
+        if self.options.mitmproxy:
+            cmd = "mitmweb" if self.options.mitmweb else "mitmproxy"
+            target = f"{self.options.local_endpoint}@{self.options.mitmproxy}"
+            proc = subprocess.Popen([cmd, "--mode", f"reverse:{target}"])
+            yield handler
+            proc.kill()
+        else:
+            yield handler
 
     def cleanup(self):
         if self.options.delete_stack:
@@ -123,22 +147,30 @@ class AwscmProxy:
             raise
 
     def deploy_stack(self):
-        with open("proxy-template.yaml", "r", encoding="utf-8") as f:
-            template_body = transform_template(f.read())
-
+        template_body = self.get_template_body()
         cfn = self.cloudformation
         method = cfn.update_stack if self.stack_exists else cfn.create_stack
-        method(
-            StackName=self.options.stack_name,
-            TemplateBody=template_body,
-            Parameters=[
+        parameters = []
+        if not self.options.bidirectional:
+            parameters.append(
                 {
                     "ParameterKey": "ApiName",
                     "ParameterValue": self.options.stack_name,
                 }
-            ],
+            )
+
+        method(
+            StackName=self.options.stack_name,
+            TemplateBody=template_body,
+            Parameters=parameters,
             Capabilities=["CAPABILITY_IAM"],
         )
+
+    def get_template_body(self):
+        prefix = "bi" if self.options.bidirectional else "uni"
+        template_path = prefix + "directional-proxy.yaml"
+        with open(template_path, "r", encoding="utf-8") as template_file:
+            return transform_template(template_file.read())
 
     def wait_for_stack_complete(self):
         logging.info("Waiting for stack deployment to complete...")
@@ -175,7 +207,7 @@ class AwscmProxy:
             for o in response["Stacks"][0].get("Outputs", [])
         }
 
-        self.endpoint_url = outputs["ApiEndpoint"]
+        self.endpoint_url = outputs["Endpoint"]
         self.queue_url = outputs["QueueUrl"]
 
 
@@ -188,27 +220,17 @@ def transform_template(template_body):
     )
 
 
-@contextlib.contextmanager
-def local_proxy(options):
-    local_endpoint = get_local_endpoint(options)
-    if options.mitmproxy:
-        cmd = "mitmweb" if options.mitmweb else "mitmproxy"
-        target = f"{options.local_endpoint}@{options.mitmproxy}"
-        proc = subprocess.Popen([cmd, "--mode", f"reverse:{target}"])
-        yield local_endpoint
-        proc.kill()
-    else:
-        yield local_endpoint
-
-
 def get_local_endpoint(options):
     if options.mitmproxy:
         return f"http://localhost:{options.mitmproxy}"
     return options.local_endpoint
 
 
-def forward_message(message, local_endpoint):
-    try:
+class UnidirectionalHandler:
+    def __init__(self, local_endpoint):
+        self.local_endpoint = local_endpoint.rstrip("/")
+
+    def forward_message(self, message):
         request_data = json.loads(message["Body"])
         body = request_data.get("body")
         if body:
@@ -227,7 +249,7 @@ def forward_message(message, local_endpoint):
 
         response = requests.request(
             method=request_data.get("method", "GET"),
-            url=f"{local_endpoint.rstrip('/')}{request_data.get('path', '/')}",
+            url=f"{self.local_endpoint}{request_data.get('path', '/')}",
             headers=headers,
             data=body,
             params=query_string,
@@ -239,9 +261,37 @@ def forward_message(message, local_endpoint):
             request_data.get("path"),
             response.status_code,
         )
-    except Exception:
-        logging.error("Failed to forward message", exc_info=True)
-        logging.info("message body: %s", message["Body"])
+
+
+class BidirectionalHandler:
+    def __init__(self, local_endpoint):
+        self.local_endpoint = local_endpoint.rstrip("/")
+        self.sfn = boto3.client("stepfunctions")
+
+    def forward_message(self, message):
+        request_data = json.loads(message["Body"])
+        payload = request_data.get("Input")
+        path_parts = [payload["rawPath"], payload["rawQueryString"]]
+        path = "?".join(filter(None, path_parts))
+        response = requests.request(
+            method=payload["requestContext"]["http"]["method"],
+            url=f"{self.local_endpoint}{path}",
+            data=payload.get("body"),
+            headers=payload["headers"],
+        )
+
+        token = request_data.get("Token")
+        result = {
+            "statusCode": response.status_code,
+            "headers": dict(response.headers),
+            # "body": base64.b64encode(response.content).decode("ascii"),
+            "body": response.text,
+            "isBase64Encoded": False,
+        }
+        self.sfn.send_task_success(
+            taskToken=token,
+            output=json.dumps(result),
+        )
 
 
 if __name__ == "__main__":

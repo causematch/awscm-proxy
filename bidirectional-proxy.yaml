@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'awscm-proxy: bidirectional serverless proxy'
+
+Resources:
+
+  StateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SQSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueUrl
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt RequestQueue.Arn
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StateMachineAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !GetAtt ProxyStateMachine.Arn
+              - Effect: Allow
+                Action:
+                  - states:DescribeExecution
+                Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:${ProxyStateMachine.Name}:*"
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ProxyFunction
+      InvokedViaFunctionUrl: true
+      Principal: "*"
+
+  LambdaInvokeFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref ProxyFunction
+      FunctionUrlAuthType: NONE
+      Principal: "*"
+
+  RequestQueue:
+    Type: AWS::SQS::Queue
+
+  ProxyStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !GetAtt StateMachineRole.Arn
+      Definition:
+        QueryLanguage: JSONata
+        StartAt: EnqueueRequest
+        States:
+          EnqueueRequest:
+            Type: Task
+            Resource: "arn:aws:states:::sqs:sendMessage.waitForTaskToken"
+            Arguments:
+              QueueUrl: !Ref RequestQueue
+              MessageBody:
+                Input: "{% $states.input %}"
+                Token: "{% $states.context.Task.Token %}"
+            End: true
+
+  ProxyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: !Sub |
+          import json
+          import logging
+          import time
+          import boto3
+          sfn = boto3.client('stepfunctions')
+
+          def handler(event, context):
+            res = sfn.start_execution(
+              stateMachineArn="${ProxyStateMachine.Arn}",
+              input=json.dumps(event),
+            )
+            execution_arn = res["executionArn"]
+            for poll_num in range(50):
+              time.sleep(0.25)
+              poll_res = sfn.describe_execution(executionArn=execution_arn)
+              if poll_res['status'] == 'SUCCEEDED':
+                logging.warn(f'got execution succeeded on poll {poll_num}')
+                return json.loads(poll_res['output'])
+            return {"statusCode": 503, "body": "{\"message\": \"timout\"}"}
+
+      Handler: index.handler
+      Runtime: python3.13
+      Timeout: 30
+      Role: !GetAtt LambdaRole.Arn
+
+  ProxyUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      AuthType: NONE
+      TargetFunctionArn: !GetAtt ProxyFunction.Arn
+
+Outputs:
+  Endpoint:
+    Description: 'Public URL of proxy'
+    Value: !GetAtt ProxyUrl.FunctionUrl
+
+  QueueUrl:
+    Description: 'Request Queue URL'
+    Value: !Ref RequestQueue
