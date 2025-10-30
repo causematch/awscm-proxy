@@ -67,20 +67,20 @@ class AwscmProxy:
         self.sqs_client = boto3.client("sqs")
         self.queue_url = None
         self.endpoint_url = None
-        self.stack_exists = self._stack_exists()
+        self.stack_exists = self.check_stack_exists()
 
     def setup(self):
         if self.stack_exists:
             if self.options.update_stack:
-                self._deploy_stack()
-                self._wait_for_stack_complete()
+                self.deploy_stack()
+                self.wait_for_stack_complete()
             logging.info("using existing stack: %s", self.options.stack_name)
-            self._get_stack_outputs()
+            self.get_stack_outputs()
         else:
             logging.info("Creating stack %s", self.options.stack_name)
-            self._deploy_stack()
-            self._wait_for_stack_complete()
-            self._get_stack_outputs()
+            self.deploy_stack()
+            self.wait_for_stack_complete()
+            self.get_stack_outputs()
 
         return self.endpoint_url
 
@@ -96,7 +96,7 @@ class AwscmProxy:
 
                     if "Messages" in messages:
                         for message in messages["Messages"]:
-                            self._forward_message(message, local_endpoint)
+                            self.forward_message(message, local_endpoint)
                             self.sqs_client.delete_message(
                                 QueueUrl=self.queue_url,
                                 ReceiptHandle=message["ReceiptHandle"],
@@ -113,7 +113,7 @@ class AwscmProxy:
             except Exception:
                 logging.error("Error deleting stack", exc_info=True)
 
-    def _stack_exists(self):
+    def check_stack_exists(self):
         try:
             self.cloudformation.describe_stacks(StackName=self.options.stack_name)
             return True
@@ -122,7 +122,7 @@ class AwscmProxy:
                 return False
             raise
 
-    def _deploy_stack(self):
+    def deploy_stack(self):
         with open("proxy-template.yaml", "r", encoding="utf-8") as f:
             template_body = transform_template(f.read())
 
@@ -140,7 +140,7 @@ class AwscmProxy:
             Capabilities=["CAPABILITY_IAM"],
         )
 
-    def _wait_for_stack_complete(self):
+    def wait_for_stack_complete(self):
         logging.info("Waiting for stack deployment to complete...")
         while True:
             time.sleep(15)
@@ -166,7 +166,7 @@ class AwscmProxy:
                 else:
                     raise
 
-    def _get_stack_outputs(self):
+    def get_stack_outputs(self):
         response = self.cloudformation.describe_stacks(
             StackName=self.options.stack_name
         )
@@ -178,7 +178,7 @@ class AwscmProxy:
         self.endpoint_url = outputs["ApiEndpoint"]
         self.queue_url = outputs["QueueUrl"]
 
-    def _forward_message(self, message, local_endpoint):
+    def forward_message(self, message, local_endpoint):
         try:
             request_data = json.loads(message["Body"])
             body = request_data.get("body")
