@@ -96,7 +96,7 @@ class AwscmProxy:
 
                     if "Messages" in messages:
                         for message in messages["Messages"]:
-                            self.forward_message(message, local_endpoint)
+                            forward_message(message, local_endpoint)
                             self.sqs_client.delete_message(
                                 QueueUrl=self.queue_url,
                                 ReceiptHandle=message["ReceiptHandle"],
@@ -178,42 +178,6 @@ class AwscmProxy:
         self.endpoint_url = outputs["ApiEndpoint"]
         self.queue_url = outputs["QueueUrl"]
 
-    def forward_message(self, message, local_endpoint):
-        try:
-            request_data = json.loads(message["Body"])
-            body = request_data.get("body")
-            if body:
-                body = base64.b64decode(body)
-            headers = request_data.get("headers")
-            if headers:
-                headers = base64.b64decode(headers).decode("utf-8")
-                headers = urllib.parse.parse_qs(headers)
-                headers = {key: val[0] for key, val in headers.items()}
-            query_string = request_data.get("querystring")
-            if query_string:
-                query_string = urllib.parse.parse_qs(
-                    base64.b64decode(query_string).decode("utf-8")
-                )
-                query_string = {key: val[0] for key, val in query_string.items()}
-
-            response = requests.request(
-                method=request_data.get("method", "GET"),
-                url=f"{local_endpoint.rstrip('/')}{request_data.get('path', '/')}",
-                headers=headers,
-                data=body,
-                params=query_string,
-            )
-
-            logging.info(
-                "Forwarded %s %s -> %d",
-                request_data.get("method"),
-                request_data.get("path"),
-                response.status_code,
-            )
-        except Exception:
-            logging.error("Failed to forward message", exc_info=True)
-            logging.info("message body: %s", message["Body"])
-
 
 @contextlib.contextmanager
 def local_proxy(options):
@@ -232,6 +196,43 @@ def get_local_endpoint(options):
     if options.mitmproxy:
         return f"http://localhost:{options.mitmproxy}"
     return options.local_endpoint
+
+
+def forward_message(message, local_endpoint):
+    try:
+        request_data = json.loads(message["Body"])
+        body = request_data.get("body")
+        if body:
+            body = base64.b64decode(body)
+        headers = request_data.get("headers")
+        if headers:
+            headers = base64.b64decode(headers).decode("utf-8")
+            headers = urllib.parse.parse_qs(headers)
+            headers = {key: val[0] for key, val in headers.items()}
+        query_string = request_data.get("querystring")
+        if query_string:
+            query_string = urllib.parse.parse_qs(
+                base64.b64decode(query_string).decode("utf-8")
+            )
+            query_string = {key: val[0] for key, val in query_string.items()}
+
+        response = requests.request(
+            method=request_data.get("method", "GET"),
+            url=f"{local_endpoint.rstrip('/')}{request_data.get('path', '/')}",
+            headers=headers,
+            data=body,
+            params=query_string,
+        )
+
+        logging.info(
+            "Forwarded %s %s -> %d",
+            request_data.get("method"),
+            request_data.get("path"),
+            response.status_code,
+        )
+    except Exception:
+        logging.error("Failed to forward message", exc_info=True)
+        logging.info("message body: %s", message["Body"])
 
 
 def transform_template(template_body):
