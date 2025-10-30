@@ -89,7 +89,7 @@ Resources:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref ApiGatewayApi
-      RouteKey: GET /
+      RouteKey: $default
       Target: !Join
         - /
         - - integrations
@@ -113,7 +113,7 @@ Resources:
       AutoDeploy: True
       Description: Step Functions Sample Project API Gateway Stage
       ApiId: !Ref ApiGatewayApi
-      StageName: StepFunctionsEmployeeManagement
+      StageName: dev
 
 
 Outputs:
