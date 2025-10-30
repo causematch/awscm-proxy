@@ -2,11 +2,13 @@
 import argparse
 import atexit
 import base64
+import contextlib
 import json
 import logging
 import re
 import secrets
 import sys
+import subprocess
 import time
 import urllib.parse
 
@@ -18,7 +20,7 @@ from botocore.exceptions import ClientError
 def main(args):
     options = parse_args(args)
 
-    proxy = AwsProxy(options)
+    proxy = AwscmProxy(options)
     if options.delete_stack:
         atexit.register(proxy.cleanup)
 
@@ -27,7 +29,7 @@ def main(args):
         print(f"Public endpoint: {endpoint_url}")
         if not options.local_endpoint:
             return
-        proxy.poll_and_forward(options.local_endpoint)
+        proxy.poll_and_forward(options)
     except KeyboardInterrupt:
         logging.info("Shutting down...")
     except Exception:
@@ -41,6 +43,17 @@ def parse_args(args):
     parser.add_argument("--update-stack", action="store_true")
     parser.add_argument("--delete-stack", action="store_true")
     parser.add_argument(
+        "--mitmproxy",
+        help="Use mitmproxy listening on specified localhost port",
+        type=int,
+        default=0,
+    )
+    parser.add_argument(
+        "--mitmweb",
+        help="Use web GUI for mitmproxy",
+        action="store_true",
+    )
+    parser.add_argument(
         "local_endpoint",
         nargs="?",
         help="Local HTTP endpoint (e.g., http://localhost:8000)",
@@ -48,7 +61,7 @@ def parse_args(args):
     return parser.parse_args(args)
 
 
-class AwsProxy:
+class AwscmProxy:
     def __init__(self, options):
         self.cloudformation = boto3.client("cloudformation")
         self.sqs_client = boto3.client("sqs")
@@ -74,23 +87,24 @@ class AwsProxy:
 
         return self.endpoint_url
 
-    def poll_and_forward(self, local_endpoint):
-        while True:
-            try:
-                messages = self.sqs_client.receive_message(
-                    QueueUrl=self.queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=20
-                )
+    def poll_and_forward(self, options):
+        with proxy(options) as local_endpoint:
+            while True:
+                try:
+                    messages = self.sqs_client.receive_message(
+                        QueueUrl=self.queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=20
+                    )
 
-                if "Messages" in messages:
-                    for message in messages["Messages"]:
-                        self._forward_message(message, local_endpoint)
-                        self.sqs_client.delete_message(
-                            QueueUrl=self.queue_url,
-                            ReceiptHandle=message["ReceiptHandle"],
-                        )
-            except Exception:
-                logging.error("Error polling/forwarding", exc_info=True)
-                time.sleep(5)
+                    if "Messages" in messages:
+                        for message in messages["Messages"]:
+                            self._forward_message(message, local_endpoint)
+                            self.sqs_client.delete_message(
+                                QueueUrl=self.queue_url,
+                                ReceiptHandle=message["ReceiptHandle"],
+                            )
+                except Exception:
+                    logging.error("Error polling/forwarding", exc_info=True)
+                    time.sleep(5)
 
     def cleanup(self):
         if self.delete_stack:
@@ -194,6 +208,25 @@ class AwsProxy:
         except Exception:
             logging.error("Failed to forward message", exc_info=True)
             logging.info("message body: %s", message["Body"])
+
+
+@contextlib.contextmanager
+def proxy(options):
+    local_endpoint = get_local_endpoint(options)
+    if options.mitmproxy:
+        cmd = "mitmweb" if options.mitmweb else "mitmproxy"
+        target = f"{options.local_endpoint}@{options.mitmproxy}"
+        proc = subprocess.Popen([cmd, "--mode", f"reverse:{target}"])
+        yield local_endpoint
+        proc.kill()
+    else:
+        yield local_endpoint
+
+
+def get_local_endpoint(options):
+    if options.mitmproxy:
+        return f"http://localhost:{options.mitmproxy}"
+    return options.local_endpoint
 
 
 def transform_template(template_body):
