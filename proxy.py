@@ -46,7 +46,6 @@ def parse_args(args):
         "--mitmproxy",
         help="Use mitmproxy listening on specified localhost port",
         type=int,
-        default=0,
     )
     parser.add_argument(
         "--mitmweb",
