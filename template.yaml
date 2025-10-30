@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS Step Functions sample project for invoking Synchronous express executions through API Gateway to manage an employee database.
+Resources:
+
+  GetterStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineType: EXPRESS
+      LoggingConfiguration:
+        Level: ALL
+        IncludeExecutionData: True
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt [ ExpressStateMachineLogGroup, Arn ]
+      RoleArn: !GetAtt [StateMachineExecutionRole, Arn]
+      Definition:
+        QueryLanguage: JSONata
+        StartAt: LoadVariables
+        States:
+          LoadVariables:
+            Type: Pass
+            End: true
+
+  StateMachineExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogDelivery'
+                  - 'logs:GetLogDelivery'
+                  - 'logs:UpdateLogDelivery'
+                  - 'logs:DeleteLogDelivery'
+                  - 'logs:ListLogDeliveries'
+                  - 'logs:PutResourcePolicy'
+                  - 'logs:DescribeResourcePolicies'
+                  - 'logs:DescribeLogGroups'
+                Resource:
+                  - '*'
+
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ApiGatewayInvokeExecution
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'states:StartSyncExecution'
+                Resource:
+                  - !Ref GetterStateMachine
+
+  ExpressStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vendedlogs/states/${AWS::StackName}"
+
+  ApiGatewayApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: StepFunctionsSyncSampleProjectEndpoint
+      ProtocolType: HTTP
+      Description: An API Gateway endpoint that integrates with the AWS Step Functions StartSyncExecution API
+
+  ApiGatewayGet:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayApi
+      RouteKey: GET /
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiGatewayGetMethod
+
+  ApiGatewayGetMethod:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayApi
+      Description: API Gateway method to call the Step Functions StartSyncExecution API on GetterStateMachine
+      CredentialsArn: !GetAtt [ ApiGatewayIamRole, Arn ]
+      IntegrationType: AWS_PROXY
+      IntegrationSubtype: StepFunctions-StartSyncExecution
+      PayloadFormatVersion: "1.0"
+      RequestParameters:
+        StateMachineArn: !Ref GetterStateMachine
+
+  ApiGatewayStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      AutoDeploy: True
+      Description: Step Functions Sample Project API Gateway Stage
+      ApiId: !Ref ApiGatewayApi
+      StageName: StepFunctionsEmployeeManagement
+
+
+Outputs:
+  ApiEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com'
