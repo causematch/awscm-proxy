@@ -29,7 +29,7 @@ def main(args):
         print(f"Public endpoint: {endpoint_url}")
         if not options.local_endpoint:
             return
-        proxy.poll_and_forward(options)
+        proxy.poll_and_forward()
     except KeyboardInterrupt:
         logging.info("Shutting down...")
     except Exception:
@@ -62,32 +62,30 @@ def parse_args(args):
 
 class AwscmProxy:
     def __init__(self, options):
+        self.options = options
         self.cloudformation = boto3.client("cloudformation")
         self.sqs_client = boto3.client("sqs")
-        self.stack_name = options.stack_name
-        self.update_stack = options.update_stack
-        self.delete_stack = options.delete_stack
         self.queue_url = None
         self.endpoint_url = None
         self.stack_exists = self._stack_exists()
 
     def setup(self):
         if self.stack_exists:
-            if self.update_stack:
+            if self.options.update_stack:
                 self._deploy_stack()
                 self._wait_for_stack_complete()
-            logging.info("using existing stack: %s", self.stack_name)
+            logging.info("using existing stack: %s", self.options.stack_name)
             self._get_stack_outputs()
         else:
-            logging.info("Creating stack %s", self.stack_name)
+            logging.info("Creating stack %s", self.options.stack_name)
             self._deploy_stack()
             self._wait_for_stack_complete()
             self._get_stack_outputs()
 
         return self.endpoint_url
 
-    def poll_and_forward(self, options):
-        with local_proxy(options) as local_endpoint:
+    def poll_and_forward(self):
+        with local_proxy(self.options) as local_endpoint:
             while True:
                 try:
                     messages = self.sqs_client.receive_message(
@@ -108,16 +106,16 @@ class AwscmProxy:
                     time.sleep(5)
 
     def cleanup(self):
-        if self.delete_stack:
+        if self.options.delete_stack:
             try:
-                logging.info("Deleting stack %s", self.stack_name)
-                self.cloudformation.delete_stack(StackName=self.stack_name)
+                logging.info("Deleting stack %s", self.options.stack_name)
+                self.cloudformation.delete_stack(StackName=self.options.stack_name)
             except Exception:
                 logging.error("Error deleting stack", exc_info=True)
 
     def _stack_exists(self):
         try:
-            self.cloudformation.describe_stacks(StackName=self.stack_name)
+            self.cloudformation.describe_stacks(StackName=self.options.stack_name)
             return True
         except ClientError as e:
             if "does not exist" in str(e):
@@ -131,9 +129,14 @@ class AwscmProxy:
         cfn = self.cloudformation
         method = cfn.update_stack if self.stack_exists else cfn.create_stack
         method(
-            StackName=self.stack_name,
+            StackName=self.options.stack_name,
             TemplateBody=template_body,
-            Parameters=[{"ParameterKey": "ApiName", "ParameterValue": self.stack_name}],
+            Parameters=[
+                {
+                    "ParameterKey": "ApiName",
+                    "ParameterValue": self.options.stack_name,
+                }
+            ],
             Capabilities=["CAPABILITY_IAM"],
         )
 
@@ -143,7 +146,7 @@ class AwscmProxy:
             time.sleep(15)
             try:
                 response = self.cloudformation.describe_stacks(
-                    StackName=self.stack_name
+                    StackName=self.options.stack_name
                 )
                 current_status = response["Stacks"][0]["StackStatus"]
                 logging.info("Stack status: %s", current_status)
@@ -164,7 +167,9 @@ class AwscmProxy:
                     raise
 
     def _get_stack_outputs(self):
-        response = self.cloudformation.describe_stacks(StackName=self.stack_name)
+        response = self.cloudformation.describe_stacks(
+            StackName=self.options.stack_name
+        )
         outputs = {
             o["OutputKey"]: o["OutputValue"]
             for o in response["Stacks"][0].get("Outputs", [])
