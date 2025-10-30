@@ -7,8 +7,8 @@ import json
 import logging
 import re
 import secrets
-import sys
 import subprocess
+import sys
 import time
 import urllib.parse
 
@@ -92,7 +92,9 @@ class AwscmProxy:
             while True:
                 try:
                     messages = self.sqs_client.receive_message(
-                        QueueUrl=self.queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=20
+                        QueueUrl=self.queue_url,
+                        MaxNumberOfMessages=10,
+                        WaitTimeSeconds=20,
                     )
 
                     if "Messages" in messages:
