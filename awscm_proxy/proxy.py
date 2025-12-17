@@ -5,6 +5,7 @@ import base64
 import contextlib
 import json
 import logging
+import os
 import re
 import secrets
 import subprocess
@@ -168,7 +169,8 @@ class AwscmProxy:
 
     def get_template_body(self):
         prefix = "bi" if self.options.bidirectional else "uni"
-        template_path = prefix + "directional-proxy.yaml"
+        template_name = prefix + "directional-proxy.yaml"
+        template_path = os.path.join(os.path.dirname(__file__), template_name)
         with open(template_path, "r", encoding="utf-8") as template_file:
             return transform_template(template_file.read())
 
@@ -294,6 +296,10 @@ class BidirectionalHandler:
         )
 
 
-if __name__ == "__main__":
+def entrypoint():
     logging.basicConfig(level=logging.INFO)
     main(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    entrypoint()
