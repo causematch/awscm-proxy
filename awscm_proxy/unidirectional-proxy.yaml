@@ -1,11 +1,20 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'awscm-proxy: unidirectional serverless proxy'
 
+Parameters:
+  PermissionsBoundary:
+    Type: String
+
+Conditions:
+  HavePermissionsBoundary:
+    !Not [!Equals [!Ref PermissionsBoundary, "null"]]
+
 Resources:
 
   ApiGatewayRole:
     Type: AWS::IAM::Role
     Properties:
+      Path: /awscm-proxy/
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -13,6 +22,10 @@ Resources:
             Principal:
               Service: apigateway.amazonaws.com
             Action: sts:AssumeRole
+      PermissionsBoundary: !If
+        - HavePermissionsBoundary
+        - !Ref PermissionsBoundary
+        - !Ref "AWS::NoValue"
       Policies:
         - PolicyName: SQSAccess
           PolicyDocument:
@@ -23,12 +36,12 @@ Resources:
                   - sqs:SendMessage
                   - sqs:GetQueueUrl
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt RequestQueue.Arn
+                Resource: !GetAtt AwscmProxyRequestQueue.Arn
 
-  RequestQueue:
+  AwscmProxyRequestQueue:
     Type: AWS::SQS::Queue
 
-  RestApi:
+  AwscmProxyApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Ref "AWS::StackName"
@@ -39,21 +52,21 @@ Resources:
   ProxyResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      RestApiId: !Ref RestApi
-      ParentId: !GetAtt RestApi.RootResourceId
+      RestApiId: !Ref AwscmProxyApi
+      ParentId: !GetAtt AwscmProxyApi.RootResourceId
       PathPart: '{proxy+}'
 
   ProxyMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref RestApi
+      RestApiId: !Ref AwscmProxyApi
       ResourceId: !Ref ProxyResource
       HttpMethod: ANY
       AuthorizationType: NONE
       Integration:
         Type: AWS
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${RequestQueue.QueueName}'
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${AwscmProxyRequestQueue.QueueName}'
         Credentials: !GetAtt ApiGatewayRole.Arn
         PassthroughBehavior: WHEN_NO_TEMPLATES
         RequestParameters:
@@ -83,18 +96,18 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ProxyMethod
-      - RestApi
+      - AwscmProxyApi
       - ProxyResource
     DeletionPolicy: Retain
     Properties:
-      RestApiId: !Ref RestApi
-      StageName: prod
+      RestApiId: !Ref AwscmProxyApi
+      StageName: awscm
 
 Outputs:
   Endpoint:
     Description: 'Public URL of proxy'
-    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Value: !Sub 'https://${AwscmProxyApi}.execute-api.${AWS::Region}.amazonaws.com/awscm'
 
   QueueUrl:
     Description: 'Request Queue URL'
-    Value: !Ref RequestQueue
+    Value: !Ref AwscmProxyRequestQueue

@@ -99,10 +99,13 @@ def get_parser():
 class AwscmProxy:
     def __init__(self, options):
         self.options = options
+        self.stack_name = namespace_stack_name(options.stack_name)
         self.cloudformation = boto3.client("cloudformation")
         self.sqs_client = boto3.client("sqs")
+        self.ssm = boto3.client("ssm")
         self.queue_url = None
         self.endpoint_url = None
+        self.roles = self.load_roles()
         self.stack_exists = self.check_stack_exists()
 
     def setup(self):
@@ -110,10 +113,10 @@ class AwscmProxy:
             if self.options.update_stack:
                 self.deploy_stack()
                 self.wait_for_stack_complete()
-            logging.info("using existing stack: %s", self.options.stack_name)
+            logging.info("using existing stack: %s", self.stack_name)
             self.get_stack_outputs()
         else:
-            logging.info("Creating stack %s", self.options.stack_name)
+            logging.info("Creating stack %s", self.stack_name)
             self.deploy_stack()
             self.wait_for_stack_complete()
             self.get_stack_outputs()
@@ -167,14 +170,26 @@ class AwscmProxy:
     def cleanup(self):
         if self.options.delete_stack:
             try:
-                logging.info("Deleting stack %s", self.options.stack_name)
-                self.cloudformation.delete_stack(StackName=self.options.stack_name)
+                logging.info("Deleting stack %s", self.stack_name)
+                self.cloudformation.delete_stack(StackName=self.stack_name)
             except Exception:
                 logging.error("Error deleting stack", exc_info=True)
 
+    def load_roles(self):
+        res = self.ssm.get_parameters(
+            Names=[
+                "/cm-proxy/cloudformation-service-role",
+                "/cm-proxy/permissions-boundary",
+            ]
+        )
+        return {
+            param["Name"].replace("/cm-proxy/", ""): param["Value"]
+            for param in res["Parameters"]
+        }
+
     def check_stack_exists(self):
         try:
-            self.cloudformation.describe_stacks(StackName=self.options.stack_name)
+            self.cloudformation.describe_stacks(StackName=self.stack_name)
             return True
         except ClientError as e:
             if "does not exist" in str(e):
@@ -185,13 +200,25 @@ class AwscmProxy:
         template_body = self.get_template_body()
         cfn = self.cloudformation
         method = cfn.update_stack if self.stack_exists else cfn.create_stack
-        parameters = []
+        parameters = [
+            {
+                "ParameterKey": "PermissionsBoundary",
+                "ParameterValue": self.roles.get("permissions-boundary", "null"),
+            }
+        ]
         method(
-            StackName=self.options.stack_name,
+            StackName=self.stack_name,
             TemplateBody=template_body,
             Parameters=parameters,
             Capabilities=["CAPABILITY_IAM"],
+            **self.cfn_role_param(),
         )
+
+    def cfn_role_param(self):
+        if cloudformation_role_arn := self.roles.get("cloudformation-service-role"):
+            print("using cloudformation service role:", cloudformation_role_arn)
+            return {"RoleARN": cloudformation_role_arn}
+        return {}
 
     def get_template_body(self):
         prefix = "bi" if self.options.bidirectional else "uni"
@@ -206,7 +233,7 @@ class AwscmProxy:
             time.sleep(15)
             try:
                 response = self.cloudformation.describe_stacks(
-                    StackName=self.options.stack_name
+                    StackName=self.stack_name
                 )
                 current_status = response["Stacks"][0]["StackStatus"]
                 logging.info("Stack status: %s", current_status)
@@ -227,9 +254,7 @@ class AwscmProxy:
                     raise
 
     def get_stack_outputs(self):
-        response = self.cloudformation.describe_stacks(
-            StackName=self.options.stack_name
-        )
+        response = self.cloudformation.describe_stacks(StackName=self.stack_name)
         outputs = {
             o["OutputKey"]: o["OutputValue"]
             for o in response["Stacks"][0].get("Outputs", [])
@@ -237,6 +262,12 @@ class AwscmProxy:
 
         self.endpoint_url = outputs["Endpoint"]
         self.queue_url = outputs["QueueUrl"]
+
+
+def namespace_stack_name(stack_name):
+    if not stack_name.startswith("awscm-proxy"):
+        return "awscm-proxy-" + stack_name
+    return stack_name
 
 
 def transform_template(template_body):
