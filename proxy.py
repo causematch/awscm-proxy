@@ -29,7 +29,7 @@ def main(args):
         print(f"Public endpoint: {endpoint_url}")
         if not options.local_endpoint:
             return
-        proxy.poll_and_forward(options)
+        proxy.poll_and_forward()
     except KeyboardInterrupt:
         logging.info("Shutting down...")
     except Exception:
@@ -39,9 +39,10 @@ def main(args):
 
 def parse_args(args):
     parser = argparse.ArgumentParser(description="AWS-based ngrok replacement")
-    parser.add_argument("--stack-name", default="ngrok-replacement")
+    parser.add_argument("--stack-name", default="awscm-proxy")
     parser.add_argument("--update-stack", action="store_true")
     parser.add_argument("--delete-stack", action="store_true")
+    parser.add_argument("--bidirectional", action="store_true")
     parser.add_argument(
         "--mitmproxy",
         help="Use mitmproxy listening on specified localhost port",
@@ -62,32 +63,30 @@ def parse_args(args):
 
 class AwscmProxy:
     def __init__(self, options):
+        self.options = options
         self.cloudformation = boto3.client("cloudformation")
         self.sqs_client = boto3.client("sqs")
-        self.stack_name = options.stack_name
-        self.update_stack = options.update_stack
-        self.delete_stack = options.delete_stack
         self.queue_url = None
         self.endpoint_url = None
-        self.stack_exists = self._stack_exists()
+        self.stack_exists = self.check_stack_exists()
 
     def setup(self):
         if self.stack_exists:
-            if self.update_stack:
-                self._deploy_stack()
-                self._wait_for_stack_complete()
-            logging.info("using existing stack: %s", self.stack_name)
-            self._get_stack_outputs()
+            if self.options.update_stack:
+                self.deploy_stack()
+                self.wait_for_stack_complete()
+            logging.info("using existing stack: %s", self.options.stack_name)
+            self.get_stack_outputs()
         else:
-            logging.info("Creating stack %s", self.stack_name)
-            self._deploy_stack()
-            self._wait_for_stack_complete()
-            self._get_stack_outputs()
+            logging.info("Creating stack %s", self.options.stack_name)
+            self.deploy_stack()
+            self.wait_for_stack_complete()
+            self.get_stack_outputs()
 
         return self.endpoint_url
 
-    def poll_and_forward(self, options):
-        with local_proxy(options) as local_endpoint:
+    def poll_and_forward(self):
+        with self.local_proxy() as proxy:
             while True:
                 try:
                     messages = self.sqs_client.receive_message(
@@ -98,7 +97,12 @@ class AwscmProxy:
 
                     if "Messages" in messages:
                         for message in messages["Messages"]:
-                            self._forward_message(message, local_endpoint)
+                            try:
+                                proxy.forward_message(message)
+                            except Exception:
+                                logging.error(
+                                    "Failed to forward message", exc_info=True
+                                )
                             self.sqs_client.delete_message(
                                 QueueUrl=self.queue_url,
                                 ReceiptHandle=message["ReceiptHandle"],
@@ -107,43 +111,74 @@ class AwscmProxy:
                     logging.error("Error polling/forwarding", exc_info=True)
                     time.sleep(5)
 
+    @contextlib.contextmanager
+    def local_proxy(self):
+        local_endpoint = get_local_endpoint(self.options)
+        handler_class = (
+            BidirectionalHandler
+            if self.options.bidirectional
+            else UnidirectionalHandler
+        )
+        handler = handler_class(local_endpoint)
+        if self.options.mitmproxy:
+            cmd = "mitmweb" if self.options.mitmweb else "mitmproxy"
+            target = f"{self.options.local_endpoint}@{self.options.mitmproxy}"
+            proc = subprocess.Popen([cmd, "--mode", f"reverse:{target}"])
+            yield handler
+            proc.kill()
+        else:
+            yield handler
+
     def cleanup(self):
-        if self.delete_stack:
+        if self.options.delete_stack:
             try:
-                logging.info("Deleting stack %s", self.stack_name)
-                self.cloudformation.delete_stack(StackName=self.stack_name)
+                logging.info("Deleting stack %s", self.options.stack_name)
+                self.cloudformation.delete_stack(StackName=self.options.stack_name)
             except Exception:
                 logging.error("Error deleting stack", exc_info=True)
 
-    def _stack_exists(self):
+    def check_stack_exists(self):
         try:
-            self.cloudformation.describe_stacks(StackName=self.stack_name)
+            self.cloudformation.describe_stacks(StackName=self.options.stack_name)
             return True
         except ClientError as e:
             if "does not exist" in str(e):
                 return False
             raise
 
-    def _deploy_stack(self):
-        with open("proxy-template.yaml", "r", encoding="utf-8") as f:
-            template_body = transform_template(f.read())
-
+    def deploy_stack(self):
+        template_body = self.get_template_body()
         cfn = self.cloudformation
         method = cfn.update_stack if self.stack_exists else cfn.create_stack
+        parameters = []
+        if not self.options.bidirectional:
+            parameters.append(
+                {
+                    "ParameterKey": "ApiName",
+                    "ParameterValue": self.options.stack_name,
+                }
+            )
+
         method(
-            StackName=self.stack_name,
+            StackName=self.options.stack_name,
             TemplateBody=template_body,
-            Parameters=[{"ParameterKey": "ApiName", "ParameterValue": self.stack_name}],
+            Parameters=parameters,
             Capabilities=["CAPABILITY_IAM"],
         )
 
-    def _wait_for_stack_complete(self):
+    def get_template_body(self):
+        prefix = "bi" if self.options.bidirectional else "uni"
+        template_path = prefix + "directional-proxy.yaml"
+        with open(template_path, "r", encoding="utf-8") as template_file:
+            return transform_template(template_file.read())
+
+    def wait_for_stack_complete(self):
         logging.info("Waiting for stack deployment to complete...")
         while True:
             time.sleep(15)
             try:
                 response = self.cloudformation.describe_stacks(
-                    StackName=self.stack_name
+                    StackName=self.options.stack_name
                 )
                 current_status = response["Stacks"][0]["StackStatus"]
                 logging.info("Stack status: %s", current_status)
@@ -163,70 +198,17 @@ class AwscmProxy:
                 else:
                     raise
 
-    def _get_stack_outputs(self):
-        response = self.cloudformation.describe_stacks(StackName=self.stack_name)
+    def get_stack_outputs(self):
+        response = self.cloudformation.describe_stacks(
+            StackName=self.options.stack_name
+        )
         outputs = {
             o["OutputKey"]: o["OutputValue"]
             for o in response["Stacks"][0].get("Outputs", [])
         }
 
-        self.endpoint_url = outputs["ApiEndpoint"]
+        self.endpoint_url = outputs["Endpoint"]
         self.queue_url = outputs["QueueUrl"]
-
-    def _forward_message(self, message, local_endpoint):
-        try:
-            request_data = json.loads(message["Body"])
-            body = request_data.get("body")
-            if body:
-                body = base64.b64decode(body)
-            headers = request_data.get("headers")
-            if headers:
-                headers = base64.b64decode(headers).decode("utf-8")
-                headers = urllib.parse.parse_qs(headers)
-                headers = {key: val[0] for key, val in headers.items()}
-            query_string = request_data.get("querystring")
-            if query_string:
-                query_string = urllib.parse.parse_qs(
-                    base64.b64decode(query_string).decode("utf-8")
-                )
-                query_string = {key: val[0] for key, val in query_string.items()}
-
-            response = requests.request(
-                method=request_data.get("method", "GET"),
-                url=f"{local_endpoint.rstrip('/')}{request_data.get('path', '/')}",
-                headers=headers,
-                data=body,
-                params=query_string,
-            )
-
-            logging.info(
-                "Forwarded %s %s -> %d",
-                request_data.get("method"),
-                request_data.get("path"),
-                response.status_code,
-            )
-        except Exception:
-            logging.error("Failed to forward message", exc_info=True)
-            logging.info("message body: %s", message["Body"])
-
-
-@contextlib.contextmanager
-def local_proxy(options):
-    local_endpoint = get_local_endpoint(options)
-    if options.mitmproxy:
-        cmd = "mitmweb" if options.mitmweb else "mitmproxy"
-        target = f"{options.local_endpoint}@{options.mitmproxy}"
-        proc = subprocess.Popen([cmd, "--mode", f"reverse:{target}"])
-        yield local_endpoint
-        proc.kill()
-    else:
-        yield local_endpoint
-
-
-def get_local_endpoint(options):
-    if options.mitmproxy:
-        return f"http://localhost:{options.mitmproxy}"
-    return options.local_endpoint
 
 
 def transform_template(template_body):
@@ -236,6 +218,80 @@ def transform_template(template_body):
         template_body,
         flags=re.MULTILINE,
     )
+
+
+def get_local_endpoint(options):
+    if options.mitmproxy:
+        return f"http://localhost:{options.mitmproxy}"
+    return options.local_endpoint
+
+
+class UnidirectionalHandler:
+    def __init__(self, local_endpoint):
+        self.local_endpoint = local_endpoint.rstrip("/")
+
+    def forward_message(self, message):
+        request_data = json.loads(message["Body"])
+        body = request_data.get("body")
+        if body:
+            body = base64.b64decode(body)
+        headers = request_data.get("headers")
+        if headers:
+            headers = base64.b64decode(headers).decode("utf-8")
+            headers = urllib.parse.parse_qs(headers)
+            headers = {key: val[0] for key, val in headers.items()}
+        query_string = request_data.get("querystring")
+        if query_string:
+            query_string = urllib.parse.parse_qs(
+                base64.b64decode(query_string).decode("utf-8")
+            )
+            query_string = {key: val[0] for key, val in query_string.items()}
+
+        response = requests.request(
+            method=request_data.get("method", "GET"),
+            url=f"{self.local_endpoint}{request_data.get('path', '/')}",
+            headers=headers,
+            data=body,
+            params=query_string,
+        )
+
+        logging.info(
+            "Forwarded %s %s -> %d",
+            request_data.get("method"),
+            request_data.get("path"),
+            response.status_code,
+        )
+
+
+class BidirectionalHandler:
+    def __init__(self, local_endpoint):
+        self.local_endpoint = local_endpoint.rstrip("/")
+        self.sfn = boto3.client("stepfunctions")
+
+    def forward_message(self, message):
+        request_data = json.loads(message["Body"])
+        payload = request_data.get("Input")
+        path_parts = [payload["rawPath"], payload["rawQueryString"]]
+        path = "?".join(filter(None, path_parts))
+        response = requests.request(
+            method=payload["requestContext"]["http"]["method"],
+            url=f"{self.local_endpoint}{path}",
+            data=payload.get("body"),
+            headers=payload["headers"],
+        )
+
+        token = request_data.get("Token")
+        result = {
+            "statusCode": response.status_code,
+            "headers": dict(response.headers),
+            # "body": base64.b64encode(response.content).decode("ascii"),
+            "body": response.text,
+            "isBase64Encoded": False,
+        }
+        self.sfn.send_task_success(
+            taskToken=token,
+            output=json.dumps(result),
+        )
 
 
 if __name__ == "__main__":

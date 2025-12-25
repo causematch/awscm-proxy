@@ -1,13 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS-based ngrok replacement'
+Description: 'awscm-proxy: unidirectional serverless proxy'
 
 Parameters:
   ApiName:
     Type: String
 
 Resources:
-  SQSQueue:
-    Type: AWS::SQS::Queue
 
   ApiGatewayRole:
     Type: AWS::IAM::Role
@@ -29,7 +27,10 @@ Resources:
                   - sqs:SendMessage
                   - sqs:GetQueueUrl
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt SQSQueue.Arn
+                Resource: !GetAtt RequestQueue.Arn
+
+  RequestQueue:
+    Type: AWS::SQS::Queue
 
   RestApi:
     Type: AWS::ApiGateway::RestApi
@@ -56,7 +57,7 @@ Resources:
       Integration:
         Type: AWS
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${SQSQueue.QueueName}'
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${RequestQueue.QueueName}'
         Credentials: !GetAtt ApiGatewayRole.Arn
         PassthroughBehavior: WHEN_NO_TEMPLATES
         RequestParameters:
@@ -95,10 +96,10 @@ Resources:
       StageName: prod
 
 Outputs:
-  ApiEndpoint:
-    Description: 'API Gateway endpoint URL'
+  Endpoint:
+    Description: 'Public URL of proxy'
     Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
 
   QueueUrl:
-    Description: 'SQS Queue URL'
-    Value: !Ref SQSQueue
+    Description: 'Request Queue URL'
+    Value: !Ref RequestQueue
