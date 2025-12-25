@@ -69,7 +69,6 @@ Resources:
             #if($qs.length() > 0)#set($qs = $qs.substring(1))#end
             #if($headers.length() > 0)#set($headers = $headers.substring(1))#end
             Action=SendMessage&MessageBody={
-              "test": "39",
               "body": "$util.base64Encode($input.body)",
               "path": "$context.path.replaceFirst("/$context.stage", "")",
               "querystring": "$util.base64Encode($qs)",
@@ -80,7 +79,7 @@ Resources:
           - StatusCode: 200
             ResponseTemplates:
               application/json: |
-                {"status": "ok", "test": 39}
+                {"status": "ok"}
       MethodResponses:
         - StatusCode: 200
 
