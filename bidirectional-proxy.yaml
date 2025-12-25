@@ -105,7 +105,7 @@ Resources:
               input=json.dumps(event),
             )
             execution_arn = res["executionArn"]
-            for poll_num in range(50):
+            for poll_num in range(100):
               time.sleep(0.25)
               poll_res = sfn.describe_execution(executionArn=execution_arn)
               if poll_res['status'] == 'SUCCEEDED':
