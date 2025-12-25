@@ -36,6 +36,10 @@ dev = [
     "pylint>=3.3.8",
     "pytest>=8.4.1",
 ]
+docs = [
+    "sphinx>=9.0.4",
+    "sphinxcontrib-autoprogram~=0.1.9",
+]
 
 [tool.pylint.main]
 jobs = 2

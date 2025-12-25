@@ -11,9 +11,9 @@ inexpensive alternative to services such as ngrok_ or localtunnel_.
 
 We at CauseMatch_ integrate many external providers, including messaging
 services, donor funds, and over a dozen payment processors.  Naturally, we
-process a lot of webhooks.  Our engineers occasionally need to receive those
+process a lot of webhooks.  Our engineers occasionally need to test those
 webhooks on a local development server.  We don’t love exposing local ports
-on the big bad internet and we had enough of expensive commercial solutions
+on the big bad internet and we’ve had enough of expensive commercial solutions
 to a simple problem.  So we built a proxy using dirt-cheap, pay-as-you-go
 AWS serverless building blocks.  Our solution seemed so obvious, we’re
 surprised we didn’t find any similar utilities.
@@ -24,6 +24,7 @@ Features
 * unidirectional and bidirectional proxy configurations
 * https endpoint
 * localhost is not publicly exposed
+* easily moved from one dev host to another
 * incoming webhooks are queued and can be processed at a later time
 * optional integration with mitmproxy and mitmweb UI
 
