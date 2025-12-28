@@ -17,7 +17,7 @@ when incoming requests are queued, and the local response is ignored.
 .. figure:: images/unidirectional-proxy.svg
    :alt: Unidirectional proxy architecture
 
-This is accomplished using AWS API Gateway and an SQS Queue.
+This is accomplished using a lambda and an SQS Queue.
 
 Bidirectional Proxy
 ----------------------
