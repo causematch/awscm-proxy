@@ -4,6 +4,12 @@ awscm-proxy
 Overview
 """""""""
 
+.. image:: https://raw.githubusercontent.com/causematch/awscm-proxy/refs/heads/master/docs/images/logo.svg
+   :alt: awscm-proxy logo
+   :align: left
+
+.. home-start
+
 awscm-proxy (pronounced “awesome proxy“) provides a quick, cheap, secure,
 and straightforward serverless localhost proxy, useful for receiving
 webhooks from third-party services on a local development server.  It is an
@@ -58,3 +64,5 @@ Quickstart
 .. _CauseMatch: https://www.causematch.com
 .. _ngrok: https://ngrok.com/
 .. _localtunnel: https://theboroer.github.io/localtunnel-www/
+
+.. home-end
