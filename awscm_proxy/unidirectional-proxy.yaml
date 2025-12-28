@@ -1,10 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'awscm-proxy: unidirectional serverless proxy'
 
-Parameters:
-  ApiName:
-    Type: String
-
 Resources:
 
   ApiGatewayRole:
@@ -35,7 +31,7 @@ Resources:
   RestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Ref ApiName
+      Name: !Ref "AWS::StackName"
       EndpointConfiguration:
         Types:
           - REGIONAL

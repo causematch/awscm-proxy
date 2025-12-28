@@ -186,14 +186,6 @@ class AwscmProxy:
         cfn = self.cloudformation
         method = cfn.update_stack if self.stack_exists else cfn.create_stack
         parameters = []
-        if not self.options.bidirectional:
-            parameters.append(
-                {
-                    "ParameterKey": "ApiName",
-                    "ParameterValue": self.options.stack_name,
-                }
-            )
-
         method(
             StackName=self.options.stack_name,
             TemplateBody=template_body,
