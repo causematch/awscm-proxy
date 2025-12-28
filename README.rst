@@ -1,9 +1,6 @@
 awscm-proxy
 ============
 
-Overview
-"""""""""
-
 .. image:: https://raw.githubusercontent.com/causematch/awscm-proxy/refs/heads/master/docs/images/logo.svg
    :alt: awscm-proxy logo
    :align: left
