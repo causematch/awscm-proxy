@@ -22,7 +22,8 @@ Apply the Principle of Least Privilege
 """""""""""""""""""""""""""""""""""""""
 Don’t give awscm-proxy any more permissions than it needs to do it’s job.
 It takes a little more work up front to do this, but we’ve done our best
-to make it easy with an additional CloudFormation template.
+to make it easy with an additional CloudFormation template.  Note that at
+present, this limits the use of awscm-proxy to a single AWS region.
 
 1. Review `proxy-role.yaml`_.  Make sure your’re comfortable with it!
 
