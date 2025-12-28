@@ -113,7 +113,6 @@ Resources:
       Code:
         ZipFile: !Sub |
           import json
-          import logging
           import time
           import boto3
           sfn = boto3.client('stepfunctions')
@@ -128,7 +127,6 @@ Resources:
               time.sleep(0.25)
               poll_res = sfn.describe_execution(executionArn=execution_arn)
               if poll_res['status'] == 'SUCCEEDED':
-                logging.warn(f'got execution succeeded on poll {poll_num}')
                 return json.loads(poll_res['output'])
             return {"statusCode": 503, "body": "{\"message\": \"timout\"}"}
 
