@@ -6,5 +6,6 @@
    Home <self>
    use
    how-it-works
+   security
    authors
    license
