@@ -14,7 +14,7 @@ Resources:
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      Path: /awscm-proxy/
+      Path: /awscm-proxy/uni/
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

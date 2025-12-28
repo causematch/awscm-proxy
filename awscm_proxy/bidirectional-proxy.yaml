@@ -15,7 +15,7 @@ Resources:
   StateMachineRole:
     Type: AWS::IAM::Role
     Properties:
-      Path: /awscm-proxy/
+      Path: /awscm-proxy/bidi/
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -42,7 +42,7 @@ Resources:
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      Path: /awscm-proxy/
+      Path: /awscm-proxy/bidi/
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -50,12 +50,12 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       PermissionsBoundary: !If
         - HavePermissionsBoundary
         - !Ref PermissionsBoundary
         - !Ref "AWS::NoValue"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: StateMachineAccess
           PolicyDocument:
