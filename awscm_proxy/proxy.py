@@ -70,7 +70,11 @@ def get_parser():
     parser.add_argument(
         "--stack-name",
         default="awscm-proxy",
-        help="Name of CloudFormation stack to create/reuse (awscm-proxy)",
+        help="""
+        Name of CloudFormation stack to create/reuse.
+        The stack name will be prefixed with awscm-proxy.
+        If no name is specified, the stack will be named awscm-proxy.
+        """,
     )
     parser.add_argument(
         "--update-stack",
