@@ -5,6 +5,7 @@ import base64
 import contextlib
 import json
 import logging
+import os
 import re
 import secrets
 import subprocess
@@ -38,27 +39,65 @@ def main(args):
 
 
 def parse_args(args):
-    parser = argparse.ArgumentParser(description="AWS-based ngrok replacement")
-    parser.add_argument("--stack-name", default="awscm-proxy")
-    parser.add_argument("--update-stack", action="store_true")
-    parser.add_argument("--delete-stack", action="store_true")
-    parser.add_argument("--bidirectional", action="store_true")
+    return get_parser().parse_args(args)
+
+
+def get_parser():
+    parser = argparse.ArgumentParser(
+        prog="awscm-proxy",
+        description="A quick, cheap, secure, and straightforward serverless localhost proxy",
+    )
+    parser.add_argument(
+        "--bidirectional",
+        action="store_true",
+        help="""Create a bidirectional proxy.
+            The local response will be returned to the external requester.
+            A 503 response is returned after a timeout of about 30 seconds.
+            If not specified, a unidirectional proxy is created, which always
+            returns a 200 response immediately and ignores the local response.
+            """,
+    )
     parser.add_argument(
         "--mitmproxy",
-        help="Use mitmproxy listening on specified localhost port",
+        help="Start and use mitmproxy on specified localhost port",
         type=int,
     )
     parser.add_argument(
         "--mitmweb",
-        help="Use web GUI for mitmproxy",
+        help="Start mitmproxy with the web GUI",
         action="store_true",
+    )
+    parser.add_argument(
+        "--stack-name",
+        default="awscm-proxy",
+        help="""
+        Name of CloudFormation stack to create/reuse.
+        The stack name will be prefixed with awscm-proxy.
+        If no name is specified, the stack will be named awscm-proxy.
+        """,
+    )
+    parser.add_argument(
+        "--update-stack",
+        action="store_true",
+        help="Update the AWS resources on start",
+    )
+    parser.add_argument(
+        "--delete-stack",
+        action="store_true",
+        help="""
+        Delete the AWS resources on exit.
+        By default, the resources are left intact and used on subsequent invocations.
+        """,
     )
     parser.add_argument(
         "local_endpoint",
         nargs="?",
-        help="Local HTTP endpoint (e.g., http://localhost:8000)",
+        help="""
+        Fully qualified local HTTP endpoint (e.g., http://localhost:8000).
+        If not specified, awscm-proxy will create the AWS resources and exit.
+        """,
     )
-    return parser.parse_args(args)
+    return parser
 
 
 class AwscmProxy:
@@ -168,7 +207,8 @@ class AwscmProxy:
 
     def get_template_body(self):
         prefix = "bi" if self.options.bidirectional else "uni"
-        template_path = prefix + "directional-proxy.yaml"
+        template_name = prefix + "directional-proxy.yaml"
+        template_path = os.path.join(os.path.dirname(__file__), template_name)
         with open(template_path, "r", encoding="utf-8") as template_file:
             return transform_template(template_file.read())
 
@@ -294,6 +334,10 @@ class BidirectionalHandler:
         )
 
 
-if __name__ == "__main__":
+def entrypoint():
     logging.basicConfig(level=logging.INFO)
     main(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    entrypoint()

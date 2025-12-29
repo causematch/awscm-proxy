@@ -1,4 +1,5 @@
-node_modules/
+dist/
+_build/
 __pycache__/
 *.pyc
 *.zip
