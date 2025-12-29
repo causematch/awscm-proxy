@@ -2,21 +2,32 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'awscm-proxy: unidirectional serverless proxy'
 
 Parameters:
-  ApiName:
+  PermissionsBoundary:
     Type: String
+
+Conditions:
+  HavePermissionsBoundary:
+    !Not [!Equals [!Ref PermissionsBoundary, "null"]]
 
 Resources:
 
-  ApiGatewayRole:
+  LambdaRole:
     Type: AWS::IAM::Role
     Properties:
+      Path: /awscm-proxy/uni/
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              Service: apigateway.amazonaws.com
+              Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+      PermissionsBoundary: !If
+        - HavePermissionsBoundary
+        - !Ref PermissionsBoundary
+        - !Ref "AWS::NoValue"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: SQSAccess
           PolicyDocument:
@@ -27,78 +38,59 @@ Resources:
                   - sqs:SendMessage
                   - sqs:GetQueueUrl
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt RequestQueue.Arn
+                Resource: !GetAtt AwscmProxyRequestQueue.Arn
 
-  RequestQueue:
+  AwscmProxyRequestQueue:
     Type: AWS::SQS::Queue
 
-  RestApi:
-    Type: AWS::ApiGateway::RestApi
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
     Properties:
-      Name: !Ref ApiName
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref AwscmProxyFunction
+      InvokedViaFunctionUrl: true
+      Principal: "*"
 
-  ProxyResource:
-    Type: AWS::ApiGateway::Resource
+  LambdaInvokeFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
     Properties:
-      RestApiId: !Ref RestApi
-      ParentId: !GetAtt RestApi.RootResourceId
-      PathPart: '{proxy+}'
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref AwscmProxyFunction
+      FunctionUrlAuthType: NONE
+      Principal: "*"
 
-  ProxyMethod:
-    Type: AWS::ApiGateway::Method
+  AwscmProxyFunction:
+    Type: AWS::Lambda::Function
     Properties:
-      RestApiId: !Ref RestApi
-      ResourceId: !Ref ProxyResource
-      HttpMethod: ANY
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${RequestQueue.QueueName}'
-        Credentials: !GetAtt ApiGatewayRole.Arn
-        PassthroughBehavior: WHEN_NO_TEMPLATES
-        RequestParameters:
-          integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
-        RequestTemplates:
-          application/json: |
-            #set($qs = "#foreach($key in $input.params().querystring.keySet())&$util.urlEncode($key)=$util.urlEncode($input.params().querystring.get($key))#end")
-            #set($headers = "#foreach($key in $input.params().header.keySet())&$util.urlEncode($key)=$util.urlEncode($input.params().header.get($key))#end")
-            #if($qs.length() > 0)#set($qs = $qs.substring(1))#end
-            #if($headers.length() > 0)#set($headers = $headers.substring(1))#end
-            Action=SendMessage&MessageBody={
-              "body": "$util.base64Encode($input.body)",
-              "path": "$context.path.replaceFirst("/$context.stage", "")",
-              "querystring": "$util.base64Encode($qs)",
-              "headers": "$util.base64Encode($headers)",
-              "method": "$context.httpMethod"
-            }
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseTemplates:
-              application/json: |
-                {"status": "ok"}
-      MethodResponses:
-        - StatusCode: 200
+      Code:
+        ZipFile: !Sub |
+          import json
+          import boto3
+          sqs = boto3.client('sqs')
 
-  RestApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn:
-      - ProxyMethod
-      - RestApi
-      - ProxyResource
-    DeletionPolicy: Retain
+          def handler(event, context):
+            res = sqs.send_message(
+              QueueUrl="${AwscmProxyRequestQueue.QueueUrl}",
+              MessageBody=json.dumps({"Input": event}),
+            )
+            return {"statusCode": 200, "body": "{\"status\": \"ok\"}"}
+
+      Handler: index.handler
+      Runtime: python3.13
+      Timeout: 30
+      Role: !GetAtt LambdaRole.Arn
+
+  AwscmProxyUrl:
+    Type: AWS::Lambda::Url
     Properties:
-      RestApiId: !Ref RestApi
-      StageName: prod
+      AuthType: NONE
+      TargetFunctionArn: !GetAtt AwscmProxyFunction.Arn
 
 Outputs:
   Endpoint:
     Description: 'Public URL of proxy'
-    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Value: !GetAtt AwscmProxyUrl.FunctionUrl
 
   QueueUrl:
     Description: 'Request Queue URL'
-    Value: !Ref RequestQueue
+    Value: !Ref AwscmProxyRequestQueue

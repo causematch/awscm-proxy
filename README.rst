@@ -45,6 +45,8 @@ Requirements
 * Python >= 3.12
 * AWS credentials
 
+Also read our page about :doc:`security`.
+
 Installation
 """""""""""""
 ::

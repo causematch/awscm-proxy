@@ -1,0 +1,206 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: managed policy and permissions boundary for awscm-proxy
+
+# deployment requires CAPABILITY_NAMED_IAM
+
+Resources:
+  AwscmProxyPermissionsBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Permissions boundary for awscm-proxy cloud resources
+      ManagedPolicyName: awscm-proxy-permissions-boundary
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+            Resource: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:*-AwscmProxyRequestQueue-*"
+          - Effect: Allow
+            Action:
+              - states:StartExecution
+            Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:AwscmProxyStateMachine-*"
+          - Effect: Allow
+            Action:
+              - states:DescribeExecution
+            Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:AwscmProxyStateMachine-*:*"
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*-AwscmProxyFunction-*"
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*-AwscmProxyFunction-*:log-stream:*"
+
+  AwscmProxyPermissionsBoundaryParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Arn of permissions boundary to use when creating roles
+      Name: /cm-proxy/permissions-boundary
+      Type: String
+      Value: !Ref AwscmProxyPermissionsBoundary
+
+  AwscmProxyCloudformationServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: cloudformation-permissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'iam:CreateRole'
+                  - 'iam:DeleteRole'
+                  - 'iam:UpdateRole'
+                  - 'iam:GetRole'
+                  - 'iam:PutRolePermissionsBoundary'
+                  - 'iam:DeleteRolePermissionsBoundary'
+                  - 'iam:AttachRolePolicy'
+                  - 'iam:DetachRolePolicy'
+                  - 'iam:PutRolePolicy'
+                  - 'iam:DeleteRolePolicy'
+                Resource: 
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/awscm-proxy/*'
+                Condition:
+                  StringEquals:
+                    'iam:PermissionsBoundary': !Ref AwscmProxyPermissionsBoundary
+              - Effect: Allow
+                Action:
+                  - 'iam:PassRole'
+                Resource: 
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/awscm-proxy/*'
+                Condition:
+                  ArnLike:
+                    "iam:AssociatedResourceARN":
+                      - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*-AwscmProxyFunction-*'
+                      - !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:AwscmProxyStateMachine-*"
+              - Effect: Allow
+                Action:
+                  - 'iam:TagRole'
+                  - 'iam:UntagRole'
+                  - 'iam:ListAttachedRolePolicies'
+                  - 'iam:GetRolePolicy'
+                  - 'iam:ListRolePolicies'
+                Resource: 
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/awscm-proxy/*'
+              - Effect: Allow
+                Action:
+                  - 'iam:GetPolicy'
+                  - 'iam:GetPolicyVersion'
+                  - 'iam:ListPolicyVersions'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'lambda:CreateFunction'
+                  - 'lambda:DeleteFunction'
+                  - 'lambda:UpdateFunctionCode'
+                  - 'lambda:UpdateFunctionConfiguration'
+                  - 'lambda:GetFunction'
+                  - 'lambda:GetFunctionConfiguration'
+                  - 'lambda:ListTags'
+                  - 'lambda:TagResource'
+                  - 'lambda:UntagResource'
+                  - 'lambda:AddPermission'
+                  - 'lambda:RemovePermission'
+                  - 'lambda:GetPolicy'
+                  - 'lambda:CreateFunctionUrlConfig'
+                  - 'lambda:DeleteFunctionUrlConfig'
+                  - 'lambda:UpdateFunctionUrlConfig'
+                  - 'lambda:GetFunctionUrlConfig'
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*-AwscmProxyFunction-*'
+              - Effect: Allow
+                Action:
+                  - 'sqs:CreateQueue'
+                  - 'sqs:DeleteQueue'
+                  - 'sqs:GetQueueAttributes'
+                  - 'sqs:SetQueueAttributes'
+                  - 'sqs:GetQueueUrl'
+                  - 'sqs:ListQueueTags'
+                  - 'sqs:TagQueue'
+                  - 'sqs:UntagQueue'
+                Resource: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:*-AwscmProxyRequestQueue-*"
+              - Effect: Allow
+                Action:
+                  - 'states:CreateStateMachine'
+                  - 'states:DeleteStateMachine'
+                  - 'states:UpdateStateMachine'
+                  - 'states:DescribeStateMachine'
+                  - 'states:ListTagsForResource'
+                  - 'states:TagResource'
+                  - 'states:UntagResource'
+                Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:AwscmProxyStateMachine-*"
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:DeleteLogGroup'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:PutRetentionPolicy'
+                  - 'logs:DeleteRetentionPolicy'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*-AwscmProxyFunction-*'
+
+  AwscmProxyCloudformationServiceRoleParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: Arn of service role to use with cloudformation
+      Name: /cm-proxy/cloudformation-service-role
+      Type: String
+      Value: !GetAtt AwscmProxyCloudformationServiceRole.Arn
+
+  AwscmProxyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Permissions for awscm-proxy
+      ManagedPolicyName: awscm-proxy-policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: 'ssm:GetParameters'
+            Resource:
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AwscmProxyPermissionsBoundaryParameter}'
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AwscmProxyCloudformationServiceRoleParameter}'
+          - Effect: Allow
+            Action:
+              - 'cloudformation:CreateStack'
+              - 'cloudformation:UpdateStack'
+              - 'cloudformation:DeleteStack'
+              - 'cloudformation:DescribeStacks'
+            Resource: 
+              - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/awscm-proxy*'
+          - Effect: Allow
+            Action:
+              - 'iam:PassRole'
+            Resource: !GetAtt AwscmProxyCloudformationServiceRole.Arn
+            Condition:
+              StringEquals:
+                'iam:PassedToService': 'cloudformation.amazonaws.com'
+          - Effect: Allow
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+            Resource: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:*-AwscmProxyRequestQueue-*"
+          - Effect: Allow
+            Action:
+              - states:SendTaskSuccess
+            Resource: "*"
+
+Outputs:
+  AwscmProxyPolicy:
+    Description: Arn of managed policy for awscm-proxy
+    Value: !Ref AwscmProxyPolicy
+    Export:
+      Name: awscm-proxy-managed-policy-arn
