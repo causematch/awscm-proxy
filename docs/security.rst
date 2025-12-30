@@ -1,9 +1,9 @@
 Security
 ---------
 
-We at CauseMatch_ are pretty careful about security.  So if you’re
+We at CauseMatch_ are extremely careful about security.  So if you’re
 wondering why it’s safe to run our code with your AWS credentials, we’re
-with you!  We’d be asking ourselves the same question.  Here are steps you
+with you.  We’d ask the same question if we were you!  Here are steps you
 can take to run awscm-proxy with peace of mind:
 
 Review the Code

@@ -18,8 +18,11 @@ process a lot of webhooks.  Our engineers occasionally need to test those
 webhooks on a local development server.  We don’t love exposing local ports
 on the big bad internet and we’ve had enough of expensive commercial solutions
 to a simple problem.  So we built a proxy using dirt-cheap, pay-as-you-go
-AWS serverless building blocks.  Our solution seemed so obvious, we’re
-surprised we didn’t find any similar utilities.
+AWS serverless building blocks.  And we cancelled our ngrok subscription.
+
+Our solution seemed so obvious, we’re surprised we didn’t find any similar
+utilities out there.  So we’re making ours available.  We hope others will
+find it useful.  Drop us a line if you do!
 
 Features
 """""""""
