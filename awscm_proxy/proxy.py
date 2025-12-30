@@ -64,12 +64,12 @@ def get_parser():
         action="store_true",
     )
     parser.add_argument(
-        "--stack-name",
+        "--stack-name-suffix",
         default="awscm-proxy",
         help="""
-        Name of CloudFormation stack to create/reuse.
-        The stack name will be prefixed with awscm-proxy.
-        If no name is specified, the stack will be named awscm-proxy.
+        Suffix of CloudFormation stack name to create/reuse.
+        If specified, the stack name will be awscm-proxy-<suffix>.
+        If not specified, the stack name will be awscm-proxy.
         """,
     )
     parser.add_argument(
@@ -99,7 +99,7 @@ def get_parser():
 class AwscmProxy:
     def __init__(self, options):
         self.options = options
-        self.stack_name = namespace_stack_name(options.stack_name)
+        self.stack_name = namespace_stack_name(options.stack_name_suffix)
         self.cloudformation = boto3.client("cloudformation")
         self.sqs_client = boto3.client("sqs")
         self.ssm = boto3.client("ssm")
