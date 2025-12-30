@@ -7,7 +7,7 @@ awscm-proxy
 
 .. home-start
 
-awscm-proxy (pronounced “awesome proxy“) provides a quick, cheap, secure,
+awscm-proxy (pronounced "awesome proxy") provides a quick, cheap, secure,
 and straightforward serverless localhost proxy, useful for receiving
 webhooks from third-party services on a local development server.  It is an
 inexpensive alternative to services such as ngrok_ or localtunnel_.
