@@ -70,5 +70,5 @@ Quickstart
 
 .. home-end
 
-.. _security: docs/security.rst
+.. _security: https://github.com/causematch/awscm-proxy/blob/master/docs/security.rst
 
