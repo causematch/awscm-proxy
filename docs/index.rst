@@ -14,5 +14,6 @@ awscm-proxy
    use
    how-it-works
    security
+   changelog
    authors
    license
