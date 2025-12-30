@@ -65,11 +65,10 @@ def get_parser():
     )
     parser.add_argument(
         "--stack-name-suffix",
-        default="awscm-proxy",
         help="""
         Suffix of CloudFormation stack name to create/reuse.
         If specified, the stack name will be awscm-proxy-<suffix>.
-        If not specified, the stack name will be awscm-proxy.
+        If not specified, the stack name will be awscm-proxy-<uni|bidi>.
         """,
     )
     parser.add_argument(
@@ -99,7 +98,7 @@ def get_parser():
 class AwscmProxy:
     def __init__(self, options):
         self.options = options
-        self.stack_name = namespace_stack_name(options.stack_name_suffix)
+        self.stack_name = self.get_stack_name()
         self.cloudformation = boto3.client("cloudformation")
         self.sqs_client = boto3.client("sqs")
         self.ssm = boto3.client("ssm")
@@ -187,6 +186,11 @@ class AwscmProxy:
             for param in res["Parameters"]
         }
 
+    def get_stack_name(self):
+        direction = "bidi" if self.options.bidirectional else "uni"
+        suffix = self.options.stack_name_suffix or direction
+        return "awscm-proxy-" + suffix
+
     def check_stack_exists(self):
         try:
             self.cloudformation.describe_stacks(StackName=self.stack_name)
@@ -262,12 +266,6 @@ class AwscmProxy:
 
         self.endpoint_url = outputs["Endpoint"]
         self.queue_url = outputs["QueueUrl"]
-
-
-def namespace_stack_name(stack_name):
-    if not stack_name.startswith("awscm-proxy"):
-        return "awscm-proxy-" + stack_name
-    return stack_name
 
 
 def get_local_endpoint(options):
