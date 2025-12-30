@@ -19,6 +19,14 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Internet :: Proxy Servers",
 ]
+authors = [
+    {name="Aryeh Leib Taurog"},
+]
+
+[project.urls]
+documentation = "https://awscm-proxy.readthedocs.io"
+repository = "https://github.com/causematch/awscm-proxy"
+issues = "https://github.com/causematch/awscm-proxy/issues"
 
 [project.scripts]
 awscm-proxy = "awscm_proxy.proxy:entrypoint"
