@@ -6,7 +6,7 @@ os.environ["COLUMNS"] = "65"
 project = "awscm-proxy"
 copyright = "2025, CauseMatch Israel Ltd <foss@causematch.com>"
 author = "Aryeh Leib Taurog, Evgeni Zabus, Paritosh Gupta, and Geva Or"
-version = "0.2.0"
+version = "0.2.1"
 release = version
 
 master_doc = "index"
