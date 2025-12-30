@@ -13,9 +13,14 @@ import boto3
 import requests
 from botocore.exceptions import ClientError
 
+from . import __version__
+
 
 def main(args):
     options = parse_args(args)
+    if options.version:
+        print(f"awscm-proxy v{__version__}")
+        return
 
     proxy = AwscmProxy(options)
     if options.delete_stack:
@@ -83,6 +88,12 @@ def get_parser():
         Delete the AWS resources on exit.
         By default, the resources are left intact and used on subsequent invocations.
         """,
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        help="Output awscm-proxy version and exit",
+        action="store_true",
     )
     parser.add_argument(
         "local_endpoint",
