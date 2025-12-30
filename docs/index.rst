@@ -5,6 +5,8 @@ awscm-proxy
    :start-after: home-start
    :end-before: home-end
 
+.. _security: security.html
+
 .. toctree::
    :hidden:
 

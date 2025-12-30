@@ -45,7 +45,7 @@ Requirements
 * Python >= 3.12
 * AWS credentials
 
-Also read our page about :doc:`security`.
+Read more about |security|_.
 
 Installation
 """""""""""""
@@ -63,5 +63,9 @@ Quickstart
 .. _CauseMatch: https://www.causematch.com
 .. _ngrok: https://ngrok.com/
 .. _localtunnel: https://theboroer.github.io/localtunnel-www/
+.. |security| replace:: security
 
 .. home-end
+
+.. _security: docs/security.rst
+
